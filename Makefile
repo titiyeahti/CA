@@ -1,24 +1,22 @@
-HOST_GCC=~/GCC/gcc-9.1.0/MYBUILD/bin/g++
-TARGET_GCC=mpicc
-PLUGIN_SOURCE_FILES= plugin.cpp
-GCCPLUGINS_DIR:= $(shell $(TARGET_GCC) -print-file-name=plugin)
-CXXFLAGS+= -I$(GCCPLUGINS_DIR)/include -fPIC -fno-rtti -g 
+CXX=g++_910
+CC=gcc_910
 
-all: test3
+MPICC=mpicc
 
-test: plugin.so test.c
-	$(TARGET_GCC) -fplugin=plugin.so test.c
+PLUGIN_FLAGS=-I`$(CC) -print-file-name=plugin`/include -g -Wall -fno-rtti -shared -fPIC
 
-test2: plugin.so test2.c
-	$(TARGET_GCC) -fplugin=plugin.so test2.c
+CFLAGS=-g -O3
 
-test3: plugin.so test3.c
-	$(TARGET_GCC) -fplugin=plugin.so test3.c
+all: test3.out
 
-plugin.so: $(PLUGIN_SOURCE_FILES)
-	$(HOST_GCC) -shared $(CXXFLAGS) $^ -o $@
+test3.out : plugin.so test3.c
+	$(MPICC) test3.c $(CFLAGS) -fplugin=plugin.so -o $@
+
+plugin.so: plugin.cpp
+	$(CXX) plugin.cpp -shared $(PLUGIN_FLAGS) -o $@
 
 clean:
-	rm -rf *.so 
+	rm -rf *.out
 
-
+clean_all: clean
+	rm -rf libplugin*.so *.dot *.out
