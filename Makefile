@@ -3,20 +3,25 @@ CC=gcc_910
 
 MPICC=mpicc
 
+SRC=src/
+
 PLUGIN_FLAGS=-I`$(CC) -print-file-name=plugin`/include -g -Wall -fno-rtti -shared -fPIC
 
 CFLAGS=-g -O3
 
 all: test3.out
 
-test3.out : plugin.so test3.c
-	$(MPICC) test3.c $(CFLAGS) -fplugin=plugin.so -o $@
+test3.out : $(SRC)test3.c plugin.so
+	$(MPICC) $< $(CFLAGS) -fplugin=plugin.so -o $@
 
-plugin.so: plugin.cpp
-	$(CXX) plugin.cpp -shared $(PLUGIN_FLAGS) -o $@
+plugin.so: $(SRC)plugin.cpp
+	$(CXX) $^ -shared $(PLUGIN_FLAGS) -o $@
+
+%.o : $(SRC)%.c $(SRC)%.h
+	$(CXX) -c $< -o $@ $(PLUGIN_FLAGS)
 
 clean:
-	rm -rf *.out
+	rm -rf *.out *so
 
 clean_all: clean
-	rm -rf libplugin*.so *.dot *.out
+	rm -rf *.so *.dot *.out
