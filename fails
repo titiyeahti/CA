@@ -1,0 +1,31 @@
+plugin.cpp:31:24: erreur: la variable « const pass_data my_pass_data » a un initialiseur mais a un type incomplet
+   31 | const struct pass_data my_pass_data = {
+      |                        ^~~~~~~~~~~~
+plugin.cpp:32:3: erreur: « GIMPLE_PASS » n'a pas été déclaré dans cette portée
+   32 |   GIMPLE_PASS, /* type */
+      |   ^~~~~~~~~~~
+plugin.cpp:35:3: erreur: « TV_OPTIMIZE » n'a pas été déclaré dans cette portée
+   35 |   TV_OPTIMIZE, /* tv_id */
+      |   ^~~~~~~~~~~
+plugin.cpp:45:1: erreur: expected class-name before « { » token
+   45 | {
+      | ^
+plugin.cpp: Dans le constructeur « my_pass::my_pass(gcc::context*) »:
+plugin.cpp:48:9: erreur: la classe « my_pass » n'a aucun champ nommé « gimple_opt_pass »
+   48 |       : gimple_opt_pass(my_pass_data, ctxt) {}
+      |         ^~~~~~~~~~~~~~~
+plugin.cpp: Dans la fonction membre « my_pass* my_pass::clone() »:
+plugin.cpp:51:26: erreur: « g » n'a pas été déclaré dans cette portée
+   51 |       return new my_pass(g);
+      |                          ^
+plugin.cpp: Dans la fonction « int plugin_init(plugin_name_args*, plugin_gcc_version*) »:
+plugin.cpp:71:13: erreur: « g » n'a pas été déclaré dans cette portée
+   71 |   my_pass p(g);
+      |             ^
+plugin.cpp:75:29: erreur: l'agrégat « plugin_init(plugin_name_args*, plugin_gcc_version*)::register_pass_info pass_info » a un type incomplet et ne peut être défini
+   75 |   struct register_pass_info pass_info;
+      |                             ^~~~~~~~~
+plugin.cpp:79:22: erreur: « PASS_POS_INSERT_AFTER » n'a pas été déclaré dans cette portée
+   79 |   pass_info.pos_op = PASS_POS_INSERT_AFTER;
+      |                      ^~~~~~~~~~~~~~~~~~~~~
+make: *** [Makefile:13: plugin.so] Error 1
