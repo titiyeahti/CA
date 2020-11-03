@@ -20,6 +20,9 @@
 #include <dominance.h>
 #include <bitmap.h>
 #include <function.h>
+#include <stdexcept>
+#include <errors.h>
+#include <vec.h>
 
 /* #include <gcc-plugin.h>
  * #include <gimple.h>
@@ -116,7 +119,17 @@ void yeti_warning(mpi_collective_code code, bitmap_head ipdf,
  **/
 void yeti_core(function *fun);
 
-// 0 if the MPI collective is not monitored, 1 if it is. Order is from the MPI collective enum.
-int MONITORED_MPI_COLLECTIVES[LAST_AND_UNUSED_MPI_COLLECTIVE_CODE] = {0};
+/* pragma handling */
+
+
+void display_monitored_mpi_functions();
+
+void pragma_set_functions_handle_ending_errors(tree x, enum cpp_ttype token, bool close_paren_needed);
+
+/* Handle ProjetCA mpicoll_check pragma */
+static void handle_pragma_set_functions(cpp_reader *ARG_UNUSED(dummy));
+
+
+vec<const char*> MPICOLLECTIVES;
 
 #endif //CODE_PLUGIN_H
