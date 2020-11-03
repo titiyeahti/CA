@@ -1,76 +1,6 @@
-/*
- * =====================================================================================
- *
- *       Filename:  plugin.cpp
- *
- *    Description:  First attempt to write a plugin for GCC.
- *
- *        Version:  1.0
- *        Created:  22/09/2020 14:19:32
- *       Revision:  none
- *       Compiler:  gcc
- *
- *         Author:  Thibaut Milhaud (tm), thibaut.milhaud@ensiie.fr
- *   Organization:  ensiie, univ-tln/Imath
- *
- * =====================================================================================
- */
 
-#include <cstdio>
-#include <stdlib.h>
-#include <gcc-plugin.h>
-#include <plugin.h>
-#include <tree.h>
-#include <gimple.h>
-#include <basic-block.h>
-#include <context.h>
-#include <tree-pass.h>
-#include <plugin-version.h>
-#include <gimple-iterator.h>
-#include <dominance.h>
-#include <bitmap.h>
+#include "plugin.h"
 
-int plugin_is_GPL_compatible;
-
-/* Enum to represent the collective operations */
-enum mpi_collective_code {
-#define DEFMPICOLLECTIVES( CODE, NAME ) CODE,
-#include "MPI_collectives.def"
-	LAST_AND_UNUSED_MPI_COLLECTIVE_CODE
-#undef DEFMPICOLLECTIVES
-} ;
-
-/* Name of each MPI collective operations */
-#define DEFMPICOLLECTIVES( CODE, NAME ) NAME,
-const char *const mpi_collective_name[] = {
-#include "MPI_collectives.def"
-} ;
-#undef DEFMPICOLLECTIVES
-
-// TD3 
-void cfgviz_dump( function * fun, const char * suffix, int mpi );
-int is_mpi(gimple *stmt);
-mpi_collective_code which_mpi(gimple *stmt);
-void mpi_tag_bb(function * fun);
-void mpi_free_aux(function * fun);
-void mpi_count_bb(function * fun);
-void mpi_split_bb(function * fun);
-int mpi_two_or_more(function * fun);
-
-// TD4
-void print_dominance(function * fun, enum cdi_direction dir);
-
-// TD5
-bitmap_head* dominance_frontier(function * fun, enum cdi_direction dir);
-bitmap_head* post_dominance_frontier(function * fun, enum cdi_direction dir);
-//void bb_rank(function * fun);
-bitmap_head subgraph(function* fun);
-
-bitmap_head set_post_dominance_frontier(bitmap_head node_set, 
-    bitmap_head* pdf, function* fun);
-
-bitmap_head it_post_dominance_frontier(bitmap_head pdf_set, bitmap_head* pdf,
-    function* fun);
 
 // CODE TD3
 struct pass_data my_pass_data = {
@@ -85,13 +15,6 @@ struct pass_data my_pass_data = {
   0, /* todo_flags_finish */
 };
 
-typedef struct bb_info{
-  mpi_collective_code code;
-  int count;
-  int rank;
-} bb_info;
-
-typedef bb_info * BB_info;
 
 int is_mpi(gimple *stmt){
   if(is_gimple_call(stmt)){
@@ -313,22 +236,19 @@ bitmap_head* post_dominance_frontier(function * fun){
   return map;
 }
 
-bitmap_head set_post_dominance_frontier(bitmap_head node_set, 
+void set_post_dominance_frontier(bitmap_head* pdf_set, bitmap_head node_set, 
     bitmap_head* pdf, function* fun){
-
-  bitmap_head pdf_set;
-  bitmap_initialize(&pdf_set, &bitmap_default_obstack);
 
   basic_block bb, bb2;
   bool found;
 
   FOR_ALL_BB_FN(bb, fun){
     if(bitmap_bit_p( &node_set, bb->index))
-      bitmap_ior_into(&pdf_set, &pdf[bb->index]);
+      bitmap_ior_into(pdf_set, &pdf[bb->index]);
   }
 
   FOR_ALL_BB_FN(bb, fun){
-    if(bitmap_bit_p(&pdf_set, bb->index)){
+    if(bitmap_bit_p(pdf_set, bb->index)){
       found = false;
 
       FOR_ALL_BB_FN(bb2, fun){
@@ -339,22 +259,19 @@ bitmap_head set_post_dominance_frontier(bitmap_head node_set,
       }
 
       if(!found)
-        bitmap_clear_bit(&pdf_set, bb->index);
+        bitmap_clear_bit(pdf_set, bb->index);
     }
   }
-
-  return pdf_set;
 }
 
-bitmap_head it_post_dominance_frontier(bitmap_head pdf_set, bitmap_head* pdf,
-    function* fun){
+void it_post_dominance_frontier(bitmap_head* ipdf, bitmap_head pdf_set, 
+    bitmap_head* pdf, function* fun){
   
   basic_block bb, b;
-  bitmap_head tmp, test, ipdf;
+  bitmap_head tmp, test;
 
   bitmap_initialize(&tmp, &bitmap_default_obstack);
   bitmap_initialize(&test, &bitmap_default_obstack);
-  bitmap_initialize(&ipdf, &bitmap_default_obstack);
 
   FOR_ALL_BB_FN(bb, fun){
     if(bitmap_bit_p(&pdf_set, bb->index)){
@@ -365,14 +282,13 @@ bitmap_head it_post_dominance_frontier(bitmap_head pdf_set, bitmap_head* pdf,
           bitmap_set_bit(&test, b->index);
       }
 
-      bitmap_copy(&test, &ipdf);
-      bitmap_ior(&ipdf, &test, &tmp);
+      bitmap_copy(&test, ipdf);
+      bitmap_ior(ipdf, &test, &tmp);
     }
   }
 
   bitmap_release(&tmp);
   bitmap_release(&test);
-  return ipdf;
 }
 
 
@@ -443,13 +359,116 @@ bitmap_head subgraph(function * fun){
   return emap;
 }
 
+void yeti_setup(function* fun){
+  bitmap_head esg;
+
+  mpi_count_bb(fun);
+  mpi_split_bb(fun);
+  mpi_tag_bb(fun);
+  esg = subgraph(fun);
+  calculate_dominance_info(CDI_DOMINATORS);
+  calculate_dominance_info(CDI_POST_DOMINATORS);
+
+#ifdef PLOT
+  cfgviz_dump(fun, "mpi", 1); 
+#endif
+
+  bitmap_release(&esg);
+}
+
+void yeti_cleanup(function* fun){
+  free_dominance_info(CDI_POST_DOMINATORS);
+  free_dominance_info(CDI_DOMINATORS);
+  mpi_free_aux(fun);
+}
+
+void yeti_warning(mpi_collective_code code, bitmap_head ipdf, 
+    bitmap_head set, function* fun){
+  basic_block bb; 
+  gimple_stmt_iterator gsi;
+  gimple* stmt;
+
+  fprintf(stdout, 
+      "WARNING(projetCA): in function %s, MPI conflict with %s. Potential forks are at lines [ ", 
+      function_name(fun), mpi_collective_name[code]);
+
+  FOR_EACH_BB_FN(bb, fun){
+    if(bitmap_bit_p(&ipdf, bb->index)){
+      gsi = gsi_start_bb(bb);
+      stmt = gsi_stmt(gsi);
+      fprintf(stdout, "%d ", gimple_lineno(stmt));
+    }
+  }
+
+  fprintf(stdout, "].\n");
+}
+
+void yeti_core(function* fun){
+  char code;
+  mpi_collective_code c;
+  int rk;
+  int max_rank;
+  basic_block bb;
+  BB_info info;
+  bitmap_head* pdf;
+  bitmap_head ipdf;
+  bitmap_head set;
+  bitmap_head pdf_set;
+
+  pdf = post_dominance_frontier(fun);
+
+  max_rank = 0;
+  FOR_ALL_BB_FN(bb, fun){
+    info = (BB_info) bb->aux;
+    if(info->rank > max_rank){
+      max_rank = info->rank;
+    }
+  }
+
+  for(code = 0; 
+      code < LAST_AND_UNUSED_MPI_COLLECTIVE_CODE;
+      code++){
+
+    c = (mpi_collective_code) code;
+    for(rk = 0; rk<max_rank+1; rk++){
+      bitmap_initialize(&set, &bitmap_default_obstack);
+      bitmap_initialize(&pdf_set, &bitmap_default_obstack);
+      bitmap_initialize(&ipdf, &bitmap_default_obstack);
+
+      FOR_EACH_BB_FN(bb, fun){
+        info = (BB_info) bb->aux;
+        if(info->code == c && info->rank == rk)
+          bitmap_set_bit(&set, bb->index);
+      }
+
+      set_post_dominance_frontier(&pdf_set, set, pdf, fun);
+      it_post_dominance_frontier(&ipdf, pdf_set, pdf, fun);
+
+      /* if pdf_set not empty */
+      if(bitmap_count_bits(&pdf_set)){
+        yeti_warning(c, pdf_set, set, fun);
+      }
+
+      bitmap_release(&set);
+      bitmap_release(&pdf_set);
+      bitmap_release(&ipdf);
+    }
+  }
+
+  FOR_ALL_BB_FN(bb, fun){
+    bitmap_release(&pdf[bb->index]);
+  }
+
+  delete pdf;
+}
+
 class my_pass : public gimple_opt_pass
 {
   public :
     my_pass(gcc::context *ctxt)
       : gimple_opt_pass(my_pass_data, ctxt) {}
-
-  my_pass *clone() {
+    
+    my_pass *clone() {
       return new my_pass(g);
     }
 
@@ -459,64 +478,11 @@ class my_pass : public gimple_opt_pass
     }
 
     unsigned int execute (function *fun) {
-      BB_info info;
-      bitmap_head* df;
-      bitmap_head* pdf;
-      bitmap_head esg;
-      basic_block bb;
-      mpi_count_bb(fun);
+      yeti_setup(fun);
 
-      FOR_ALL_BB_FN(bb, fun){
-        info = (BB_info) bb->aux;
-        if(info->code < LAST_AND_UNUSED_MPI_COLLECTIVE_CODE)
-          printf("%d : %s (%d)\n", bb->index, mpi_collective_name[info->code],
-              info->rank);
-        else
-          printf("%d : not mpi call (%d)\n", bb->index, info->rank);
-      }
-      mpi_split_bb(fun);
-      mpi_tag_bb(fun);
-      esg = subgraph(fun);
-      cfgviz_dump(fun, "", 0); 
-      cfgviz_dump(fun, "mpi", 1); 
-      char str[10];
+      yeti_core(fun);
 
-      FOR_ALL_BB_FN(bb, fun){
-        info = (BB_info) bb->aux;
-        if(info->code < LAST_AND_UNUSED_MPI_COLLECTIVE_CODE)
-          printf("%d : %s (%d)\n", bb->index, mpi_collective_name[info->code],
-              info->rank);
-        else
-          printf("%d : not mpi call (%d)\n", bb->index, info->rank);
-      }
-
-      //print_dominance(fun, CDI_DOMINATORS);
-
-      printf("DF:\n");
-      calculate_dominance_info(CDI_DOMINATORS);
-      df = dominance_frontier(fun);
-      FOR_ALL_BB_FN(bb, fun){
-        sprintf(str, "%d :", bb->index); 
-        bitmap_print(stdout, &df[bb->index], str, "\n");
-        bitmap_release(&df[bb->index]);
-      }
-      delete df;
-      
-      //print_dominance(fun, CDI_POST_DOMINATORS);
-
-      printf("\n\nPDF:\n");
-      calculate_dominance_info(CDI_POST_DOMINATORS);
-      pdf = post_dominance_frontier(fun);
-      FOR_ALL_BB_FN(bb, fun){
-        sprintf(str, "%d :", bb->index); 
-        bitmap_print(stdout, &pdf[bb->index], str, "\n");
-        bitmap_release(&pdf[bb->index]);
-      }
-      delete pdf;
-
-      free_dominance_info(CDI_POST_DOMINATORS);
-      free_dominance_info(CDI_DOMINATORS);
-      mpi_free_aux(fun);
+      yeti_cleanup(fun);
       return 0;
     }
 };
