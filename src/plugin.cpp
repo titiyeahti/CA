@@ -574,14 +574,12 @@ cfgviz_internal_dump( function * fun, FILE * out, int mpi )
 
   tree node;
   int index, next;
-
-  FOR_ALL_BB_FN(bb, fun){
-    index = bb->index;
 //    if(bb->aux) printf("N%d - AUX: %d\tcount: %d\n", index,
 //        ((BB_info) bb->aux)->code, 
 //        ((BB_info) bb->aux)->count);
 
-    fprintf(out, "\tN%d [label=\"%d :\\n", index, index);
+  FOR_ALL_BB_FN(bb, fun){
+    fprintf(out, "\tN%d [label=\"%d :\\n", bb->index, bb->index);
     for(gsi = gsi_start_bb(bb); !gsi_end_p(gsi); gsi_next(&gsi)){
       stmt = gsi_stmt(gsi);
       if((is_gimple_call(stmt)&&(!mpi)) || is_mpi(stmt)){
