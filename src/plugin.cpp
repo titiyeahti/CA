@@ -144,6 +144,7 @@ void mpi_count_bb(function* fun){
       bbi->code = code;
 
     bbi->count = count;
+    bbi->rank = 0;
     bb->aux = (void*) bbi;
   }
 }
@@ -169,7 +170,7 @@ void mpi_split_bb(function * fun){
     gimple* stmt;
     gimple_stmt_iterator gsi;
     gsi = gsi_start_bb(bb);
-// TODO modifier cet endroit
+//Should be ok
     while(count > 1){
       stmt = gsi_stmt(gsi);
       if(is_mpi(stmt)){
@@ -198,8 +199,8 @@ mpi_tag_bb(function * fun)
       if(is_mpi(stmt)){
         BB_info bbi =  new bb_info;
         bbi->code = which_mpi(stmt);
+        bbi->rank = 0;
         bb->aux = (void*) bbi;
-        bb->rank = 0;
       }
     }
   }
@@ -431,10 +432,14 @@ bitmap_head subgraph(function * fun){
       }
     }
 
-    info->rank = rk+1;
+    if(info->code < LAST_AND_UNUSED_MPI_COLLECTIVE_CODE)
+      info->rank = rk+1;
+    else
+      info->rank = rk;
   }
 
   bitmap_release(&in_queue);
+  bitmap_release(&set);
   return emap;
 }
 
@@ -454,17 +459,36 @@ class my_pass : public gimple_opt_pass
     }
 
     unsigned int execute (function *fun) {
+      BB_info info;
       bitmap_head* df;
       bitmap_head* pdf;
+      bitmap_head esg;
       basic_block bb;
       mpi_count_bb(fun);
+
+      FOR_ALL_BB_FN(bb, fun){
+        info = (BB_info) bb->aux;
+        if(info->code < LAST_AND_UNUSED_MPI_COLLECTIVE_CODE)
+          printf("%d : %s (%d)\n", bb->index, mpi_collective_name[info->code],
+              info->rank);
+        else
+          printf("%d : not mpi call (%d)\n", bb->index, info->rank);
+      }
       mpi_split_bb(fun);
       mpi_tag_bb(fun);
+      esg = subgraph(fun);
       cfgviz_dump(fun, "", 0); 
       cfgviz_dump(fun, "mpi", 1); 
-      mpi_free_aux(fun);
       char str[10];
 
+      FOR_ALL_BB_FN(bb, fun){
+        info = (BB_info) bb->aux;
+        if(info->code < LAST_AND_UNUSED_MPI_COLLECTIVE_CODE)
+          printf("%d : %s (%d)\n", bb->index, mpi_collective_name[info->code],
+              info->rank);
+        else
+          printf("%d : not mpi call (%d)\n", bb->index, info->rank);
+      }
 
       //print_dominance(fun, CDI_DOMINATORS);
 
