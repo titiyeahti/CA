@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdexcept>
+#include <string.h>
 //#include <errors.h>
 
 #include <gcc-plugin.h>
@@ -36,6 +37,8 @@
  */
 
 int plugin_is_GPL_compatible;
+
+#define PLOT
 
 /* Enum to represent the collective operations */
 

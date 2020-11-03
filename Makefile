@@ -9,9 +9,9 @@ PLUGIN_FLAGS=-I`$(CC) -print-file-name=plugin`/include -g -Wall -fno-rtti -share
 
 CFLAGS=-g -O3
 
-all: test3.out
+all: test3.out test2.out
 
-test3.out : $(SRC)test3.c plugin.so
+test%.out : $(SRC)test%.c plugin.so
 	$(MPICC) $< $(CFLAGS) -fplugin=plugin.so -o $@
 
 plugin.so: $(SRC)plugin.cpp

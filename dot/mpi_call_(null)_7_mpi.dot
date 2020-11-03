@@ -1,0 +1,16 @@
+Digraph G{
+	N0 [label="0 :\n" shape=ellipse]
+	N2 [label="2 :\nMPI_Barrier\n" shape=ellipse]
+	N3 [label="3 :\nMPI_Barrier\n" shape=ellipse]
+	N6 [label="6 :\nMPI_Barrier\n" shape=ellipse]
+	N4 [label="4 :\nMPI_Barrier\n" shape=ellipse]
+	N5 [label="5 :\n" shape=ellipse]
+	N1 [label="1 :\n" shape=ellipse]
+	N0 -> N2 [color=red]
+	N2 -> N3 [color=red]
+	N2 -> N4 [color=red]
+	N3 -> N6 [color=red]
+	N6 -> N5 [color=red]
+	N4 -> N5 [color=red]
+	N5 -> N1 [color=red]
+}

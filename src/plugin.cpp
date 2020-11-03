@@ -516,8 +516,9 @@ cfgviz_generate_filename( function * fun, const char * suffix )
 
 	target_filename = (char *)xmalloc( 2048 * sizeof( char ) ) ;
 
-	snprintf( target_filename, 1024, "dot/%s_file_%d_%s.dot", 
+	snprintf( target_filename, 1024, "dot/%s_%s_%d_%s.dot", 
 			current_function_name(),
+      LOCATION_FILE(fun->function_start_locus)+4, 
 			LOCATION_LINE( fun->function_start_locus ),
 			suffix ) ;
 
