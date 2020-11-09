@@ -105,7 +105,8 @@ void mpi_split_bb(function * fun){
         bb->aux = (void*) info;
         gsi = gsi_start_bb(bb);
       }
-      gsi_next(&gsi);
+      else
+        gsi_next(&gsi);
     }
   }
 }
